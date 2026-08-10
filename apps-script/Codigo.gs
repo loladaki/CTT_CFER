@@ -74,6 +74,7 @@ function configurar() {
   enc.setColumnWidth(3, 140); enc.setColumnWidth(4, 320);
   enc.setColumnWidth(5, 180); enc.setColumnWidth(7, 150); enc.setColumnWidth(8, 150);
   enc.setColumnWidth(10, 170);
+  enc.getRange("F2:F1000").setNumberFormat('0"%"'); // Progresso: guarda 0-100, mostra "80%"
   aplicarCores(enc);
 
   // --- Folha "Histórico" ---
@@ -203,7 +204,7 @@ function atualizarEncomendas() {
 
     const ev = res.events[0] || {};
     const dataEv = ev.DateTime ? Utilities.formatDate(new Date(ev.DateTime), TZ, "dd/MM/yyyy HH:mm") : "";
-    const prog = (ev.Progress != null) ? (ev.Progress + "%") : "";
+    const prog = (ev.Progress != null) ? Number(ev.Progress) : ""; // 0-100 (número); a coluna mostra "%"
     enc.getRange(linha, 3, 1, 6).setValues([[ ev.State || "", ev.Event || "", ev.Local || "", prog, dataEv, agora() ]]);
     enc.getRange(linha, 9).setValue("Sim");
 
@@ -406,7 +407,7 @@ function obterDados() {
         estado: String(r[2] || ""),
         situacao: String(r[3] || ""),
         local: String(r[4] || ""),
-        progresso: String(r[5] || ""),
+        progresso: (r[5] !== "" && r[5] != null) ? String(r[5]) : "",
         dataEvento: String(r[6] || ""),
         verificado: String(r[7] || ""),
         encontrado: String(r[8] || ""),
@@ -463,7 +464,7 @@ function adicionarEncomenda(code, descricao) {
     } else {
       const ev = res.events[0] || {};
       const dataEv = ev.DateTime ? Utilities.formatDate(new Date(ev.DateTime), TZ, "dd/MM/yyyy HH:mm") : "";
-      const prog = (ev.Progress != null) ? (ev.Progress + "%") : "";
+      const prog = (ev.Progress != null) ? Number(ev.Progress) : ""; // 0-100 (número); a coluna mostra "%"
       enc.getRange(linha, 3, 1, 6).setValues([[ ev.State || "", ev.Event || "", ev.Local || "", prog, dataEv, agora() ]]);
       enc.getRange(linha, 9).setValue("Sim");
       const fim = estadoFinal(ev.State);

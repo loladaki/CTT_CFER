@@ -195,7 +195,9 @@
     return r;
   }
   function chip(p){var cat=categoria(p.estado);return '<span class="chip '+cat+'">'+esc(p.estado||LABELS[cat])+'</span>';}
-  function barra(prog){var n=parseInt(prog,10);if(isNaN(n))return "";return '<div class="bar"><span style="width:'+Math.max(0,Math.min(100,n))+'%"></span></div>';}
+  // Normaliza o progresso: aceita 80, "80%", 0.8 ou "0,8" e devolve 0..100.
+  function progNum(v){var n=parseFloat(String(v==null?"":v).replace("%","").replace(",","."));if(isNaN(n))return null;if(n<=1)n=n*100;return Math.round(n);}
+  function barra(prog){var n=progNum(prog);if(n==null)return "";return '<div class="bar"><span style="width:'+Math.max(0,Math.min(100,n))+'%"></span></div>';}
 
   function renderTabela(){
     var rows=filtrados(), tb=document.getElementById("tbody");
@@ -209,7 +211,7 @@
         '<td>'+(esc(p.descricao)||'<span class="muted">—</span>')+'</td>'+
         '<td>'+chip(p)+'</td>'+
         '<td>'+esc(p.situacao||"—")+'<div class="evloc">'+esc(p.dataEvento||"")+(p.local?" · "+esc(p.local):"")+'</div>'+hb+hbk+'</td>'+
-        '<td>'+esc(p.progresso||"")+barra(p.progresso)+'</td>'+
+        '<td>'+(progNum(p.progresso)==null?"":progNum(p.progresso)+"%")+barra(p.progresso)+'</td>'+
         '<td class="when">'+esc(p.verificado||"—")+'</td>'+
         '<td class="seg">'+esc(p.seguimento||"—")+'</td>'+
       '</tr>';
