@@ -1,0 +1,69 @@
+name: Adicionar encomenda
+
+on:
+  workflow_dispatch:
+    inputs:
+      tracking_number:
+        description: "Número(s) de objeto (separa vários por espaço)"
+        required: true
+        type: string
+      description:
+        description: "Descrição (opcional, aplica-se se indicares só 1 número)"
+        required: false
+        type: string
+      check_now:
+        description: "Consultar já o estado depois de adicionar?"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ctt-update
+  cancel-in-progress: false
+
+jobs:
+  add:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Adicionar à lista
+        run: |
+          python scripts/add_parcel.py ${{ github.event.inputs.tracking_number }} "${{ github.event.inputs.description }}"
+
+      - name: Instalar Chromium (Playwright)
+        if: ${{ github.event.inputs.check_now == 'true' }}
+        run: python -m playwright install --with-deps chromium
+
+      - name: Consultar estado já
+        if: ${{ github.event.inputs.check_now == 'true' }}
+        env:
+          CTT_DEBUG: "1"
+        run: python -m tracker.update
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/tracking_numbers.txt data/parcels.json docs/data.json
+          if git diff --staged --quiet; then
+            echo "Sem alterações."
+          else
+            git commit -m "chore: adicionar encomenda(s) e atualizar estado [skip ci]"
+            git push
+          fi
