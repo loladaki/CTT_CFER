@@ -424,6 +424,68 @@ function atualizarViaDashboard() {
   return obterDados();
 }
 
+// Adiciona uma encomenda a partir do dashboard e consulta logo o estado.
+function adicionarEncomenda(code, descricao) {
+  code = String(code || "").trim().toUpperCase();
+  descricao = String(descricao || "").trim();
+  if (!code) return { ok: false, msg: "Indica um número de objeto." };
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let enc = ss.getSheetByName(FOLHA_ENC);
+  if (!enc) { configurar(); enc = ss.getSheetByName(FOLHA_ENC); }
+
+  // Já existe?
+  const last = enc.getLastRow();
+  if (last > 1) {
+    const codes = enc.getRange(2, 1, last - 1, 1).getValues();
+    for (let i = 0; i < codes.length; i++) {
+      if (String(codes[i][0] || "").trim().toUpperCase() === code) {
+        return { ok: false, msg: "Esse objeto já está na lista." };
+      }
+    }
+  }
+
+  const linha = enc.getLastRow() + 1;
+  enc.getRange(linha, 1).setValue(code);
+  if (descricao) enc.getRange(linha, 2).setValue(descricao);
+
+  // Consultar já o estado
+  try {
+    const sess = abrirSessao();
+    if (!sess) { enc.getRange(linha, 3).setValue("⚠ Sem ligação"); return { ok: true, msg: "Adicionado (sem ligação aos CTT agora)." }; }
+    const res = consultar(code, sess);
+    if (res.versaoMudou) {
+      enc.getRange(linha, 3).setValue("⚠ Atualizar API_VERSION (ver guia)");
+    } else if (!res.found) {
+      enc.getRange(linha, 3, 1, 6).setValues([["Sem informação", "Objeto ainda não registado ou inexistente", "", "", "", agora()]]);
+      enc.getRange(linha, 9).setValue("Não");
+      enc.getRange(linha, 10).setValue("🟡 Ativa");
+    } else {
+      const ev = res.events[0] || {};
+      const dataEv = ev.DateTime ? Utilities.formatDate(new Date(ev.DateTime), TZ, "dd/MM/yyyy HH:mm") : "";
+      const prog = (ev.Progress != null) ? (ev.Progress + "%") : "";
+      enc.getRange(linha, 3, 1, 6).setValues([[ ev.State || "", ev.Event || "", ev.Local || "", prog, dataEv, agora() ]]);
+      enc.getRange(linha, 9).setValue("Sim");
+      const fim = estadoFinal(ev.State);
+      enc.getRange(linha, 10).setValue(fim ? etiquetaFechada(fim) : "🟡 Ativa");
+
+      // Histórico
+      const hist = ss.getSheetByName(FOLHA_HIST);
+      if (hist) {
+        const linhasHist = res.events.slice().reverse().map(function (e) {
+          const d = e.DateTime ? Utilities.formatDate(new Date(e.DateTime), TZ, "dd/MM/yyyy HH:mm") : "";
+          return [code, d, e.State || "", e.Event || "", e.Local || ""];
+        });
+        if (linhasHist.length) hist.getRange(hist.getLastRow() + 1, 1, linhasHist.length, 5).setValues(linhasHist);
+      }
+    }
+  } catch (e) {
+    enc.getRange(linha, 3).setValue("⚠ Erro");
+    enc.getRange(linha, 4).setValue(String(e));
+  }
+  return { ok: true, msg: "Adicionado: " + code };
+}
+
 /* =========================================================================
  * ATUALIZAR A apiVersion (só se um dia o Estado passar a mostrar
  * "⚠ Atualizar API_VERSION"):

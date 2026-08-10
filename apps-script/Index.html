@@ -30,7 +30,17 @@
   .btn{border:1px solid var(--border);background:var(--surface-2);color:var(--text);border-radius:8px;padding:7px 12px;cursor:pointer;font-size:13px;}
   .btn:hover{background:var(--border);}
   .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);}
-  main{max-width:1120px;margin:0 auto;padding:20px;}
+  .btn.add{background:var(--c-delivered);color:#fff;border-color:var(--c-delivered);font-weight:600;}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;}
+  .modal-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;width:100%;max-width:420px;box-shadow:0 10px 40px rgba(0,0,0,.3);}
+  .modal-box h2{margin:0 0 14px;font-size:18px;}
+  .modal-box label{display:block;font-size:13px;color:var(--text-dim);margin-bottom:12px;}
+  .modal-box input{display:block;width:100%;margin-top:5px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:14px;}
+  .modal-box input:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+  .m-msg{min-height:18px;font-size:13px;margin:2px 0 12px;}
+  .m-msg.err{color:var(--c-returned);} .m-msg.ok{color:var(--c-delivered);}
+  .modal-actions{display:flex;justify-content:flex-end;gap:10px;}
+  main{max-width:none;margin:0;padding:20px 28px;}
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px;}
   .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);}
   .kpi .n{font-size:30px;font-weight:750;line-height:1;font-variant-numeric:tabular-nums;}
@@ -73,10 +83,28 @@
     <div class="brand"><span class="dot"></span><h1>Seguimento de Encomendas CTT</h1></div>
     <div class="meta">
       <span id="updated">a carregar…</span>
+      <button class="btn add" id="add" title="Adicionar uma encomenda">＋ Adicionar</button>
       <button class="btn" id="reload" title="Recarregar da folha">↻ Recarregar</button>
       <button class="btn primary" id="fetch" title="Ir aos CTT buscar estados agora (mais lento)">Atualizar CTT</button>
     </div>
   </header>
+
+  <div id="modal" class="modal" hidden>
+    <div class="modal-box">
+      <h2>Adicionar encomenda</h2>
+      <label>Nº de objeto
+        <input type="text" id="m-code" placeholder="ex.: RR123456789PT" autocomplete="off">
+      </label>
+      <label>Descrição (opcional)
+        <input type="text" id="m-desc" placeholder="ex.: Cliente Sousa Lda">
+      </label>
+      <p class="m-msg" id="m-msg"></p>
+      <div class="modal-actions">
+        <button class="btn" id="m-cancel">Cancelar</button>
+        <button class="btn primary" id="m-save">Adicionar</button>
+      </div>
+    </div>
+  </div>
   <main>
     <section class="kpis" id="kpis"></section>
     <section class="controls">
@@ -194,6 +222,34 @@
   document.getElementById("search").addEventListener("input",function(e){termo=e.target.value.trim();renderTabela();});
   document.getElementById("filters").addEventListener("click",function(e){var b=e.target.closest("button[data-cat]");if(!b)return;filtro=b.dataset.cat;renderFiltros();renderTabela();});
   Array.prototype.forEach.call(document.querySelectorAll("th[data-k]"),function(th){th.addEventListener("click",function(){var k=th.dataset.k;if(sortK===k)sortDir*=-1;else{sortK=k;sortDir=1;}renderTabela();});});
+  // --- Modal "Adicionar encomenda" ---
+  var modal=document.getElementById("modal");
+  function abrirModal(){document.getElementById("m-code").value="";document.getElementById("m-desc").value="";var m=document.getElementById("m-msg");m.textContent="";m.className="m-msg";modal.hidden=false;document.getElementById("m-code").focus();}
+  function fecharModal(){modal.hidden=true;}
+  document.getElementById("add").addEventListener("click",abrirModal);
+  document.getElementById("m-cancel").addEventListener("click",fecharModal);
+  modal.addEventListener("click",function(e){if(e.target===modal)fecharModal();});
+  function guardarNovo(){
+    var code=document.getElementById("m-code").value.trim();
+    var desc=document.getElementById("m-desc").value.trim();
+    var msg=document.getElementById("m-msg");
+    if(!code){msg.textContent="Escreve um número de objeto.";msg.className="m-msg err";return;}
+    var save=document.getElementById("m-save");
+    save.disabled=true;save.textContent="A adicionar…";
+    msg.textContent="A consultar os CTT…";msg.className="m-msg";
+    google.script.run.withSuccessHandler(function(r){
+      save.disabled=false;save.textContent="Adicionar";
+      if(r&&r.ok){fecharModal();carregar();}
+      else{msg.textContent=(r&&r.msg)||"Não foi possível adicionar.";msg.className="m-msg err";}
+    }).withFailureHandler(function(e){
+      save.disabled=false;save.textContent="Adicionar";
+      msg.textContent="Erro: "+(e&&e.message);msg.className="m-msg err";
+    }).adicionarEncomenda(code,desc);
+  }
+  document.getElementById("m-save").addEventListener("click",guardarNovo);
+  document.getElementById("m-code").addEventListener("keydown",function(e){if(e.key==="Enter")guardarNovo();});
+  document.getElementById("m-desc").addEventListener("keydown",function(e){if(e.key==="Enter")guardarNovo();});
+
   document.getElementById("reload").addEventListener("click",carregar);
   document.getElementById("fetch").addEventListener("click",function(){
     var btn=this;btn.disabled=true;btn.textContent="A consultar CTT…";
