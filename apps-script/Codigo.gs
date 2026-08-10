@@ -131,6 +131,7 @@ function atualizarEncomendas() {
   if (ultima < 2) { SpreadsheetApp.getActiveSpreadsheet().toast("Não há números na coluna A."); return; }
 
   const codigos = enc.getRange(2, 1, ultima - 1, 1).getValues();
+  const estados = enc.getRange(2, 3, ultima - 1, 1).getValues(); // coluna C: estado atual (lido de uma vez)
   const sess = abrirSessao();
   if (!sess) { enc.getRange(2, 3).setValue("⚠ Sem ligação aos CTT"); return; }
 
@@ -142,11 +143,21 @@ function atualizarEncomendas() {
     });
   }
   const novosHist = [];
+  let consultadas = 0, ignoradas = 0;
 
   for (let i = 0; i < codigos.length; i++) {
     const code = String(codigos[i][0] || "").trim().toUpperCase();
     const linha = i + 2;
     if (!code) continue;
+
+    // Ignorar encomendas já FINALIZADAS — não gastam pedidos aos CTT.
+    // (Fica "ativa" de novo se apagares a célula do Estado, coluna C.)
+    const estadoAtual = String(estados[i][0] || "").trim().toLowerCase();
+    if (estadoAtual.indexOf("entregue") === 0 || estadoAtual.indexOf("devolvid") === 0) {
+      ignoradas++;
+      continue;
+    }
+    consultadas++;
 
     let res;
     try { res = consultar(code, sess); }
@@ -185,7 +196,8 @@ function atualizarEncomendas() {
   if (hist && novosHist.length) {
     hist.getRange(hist.getLastRow() + 1, 1, novosHist.length, 5).setValues(novosHist);
   }
-  ss.toast("Atualização concluída ✅  (" + (codigos.length) + " objeto(s))", "CTT", 5);
+  ss.toast("Atualização concluída ✅  " + consultadas + " consultada(s), " +
+           ignoradas + " já finalizada(s) (ignorada(s)).", "CTT", 6);
 }
 
 function agora() { return Utilities.formatDate(new Date(), TZ, "dd/MM/yyyy HH:mm"); }
