@@ -54,13 +54,14 @@ function configurar() {
   // --- Folha "Encomendas" ---
   let enc = ss.getSheetByName(FOLHA_ENC) || ss.insertSheet(FOLHA_ENC, 0);
   const cabec = ["Nº Objeto", "Descrição", "Estado", "Situação (último evento)",
-                 "Local", "Progresso", "Data do evento", "Verificado em", "Encontrado"];
+                 "Local", "Progresso", "Data do evento", "Verificado em", "Encontrado", "Seguimento"];
   enc.getRange(1, 1, 1, cabec.length).setValues([cabec])
      .setFontWeight("bold").setBackground("#c8102e").setFontColor("#ffffff");
   enc.setFrozenRows(1);
   enc.setColumnWidth(1, 150); enc.setColumnWidth(2, 200);
   enc.setColumnWidth(3, 140); enc.setColumnWidth(4, 320);
   enc.setColumnWidth(5, 180); enc.setColumnWidth(7, 150); enc.setColumnWidth(8, 150);
+  enc.setColumnWidth(10, 170);
   aplicarCores(enc);
 
   // --- Folha "Histórico" ---
@@ -75,9 +76,12 @@ function configurar() {
   let pain = ss.getSheetByName(FOLHA_PAINEL) || ss.insertSheet(FOLHA_PAINEL, 0);
   pain.clear();
   const col = "'" + FOLHA_ENC + "'!C2:C";
+  const colJ = "'" + FOLHA_ENC + "'!J2:J";
   const kpis = [
     ["Painel de Encomendas CTT", ""],
     ["Total", '=COUNTA(' + "'" + FOLHA_ENC + "'!A2:A)"],
+    ["Em seguimento (ativas)", '=COUNTIF(' + colJ + ',"*Ativa*")'],
+    ["Fechadas", '=COUNTIF(' + colJ + ',"*Fechada*")'],
     ["Devolvidas", '=COUNTIF(' + col + ',"*Devolv*")'],
     ["Entregues", '=COUNTIF(' + col + ',"*Entregue*")'],
     ["Em entrega/distribuição", '=COUNTIF(' + col + ',"*entrega*")+COUNTIF(' + col + ',"*distribui*")'],
@@ -89,7 +93,7 @@ function configurar() {
   pain.getRange(1, 1, 1, 2).merge().setFontWeight("bold").setFontSize(14)
       .setBackground("#c8102e").setFontColor("#ffffff");
   pain.getRange(2, 1, kpis.length - 1, 1).setFontWeight("bold");
-  pain.getRange(3, 2).setFontColor("#b42318").setFontWeight("bold"); // devolvidas
+  pain.getRange(5, 2).setFontColor("#b42318").setFontWeight("bold"); // devolvidas
   pain.setColumnWidth(1, 220); pain.setColumnWidth(2, 100);
 
   SpreadsheetApp.getUi().alert("Configuração concluída ✅\n\nEscreve números de objeto na coluna A da folha \"Encomendas\" e depois usa o menu CTT → Atualizar agora.");
@@ -150,26 +154,38 @@ function atualizarEncomendas() {
     const linha = i + 2;
     if (!code) continue;
 
-    // Ignorar encomendas já FINALIZADAS — não gastam pedidos aos CTT.
-    // (Fica "ativa" de novo se apagares a célula do Estado, coluna C.)
-    const estadoAtual = String(estados[i][0] || "").trim().toLowerCase();
-    if (estadoAtual.indexOf("entregue") === 0 || estadoAtual.indexOf("devolvid") === 0) {
+    // --- Lógica ATIVA / FECHADA -------------------------------------------
+    // Encomendas num estado FINAL (Entregue / Devolvido) deixam de ser
+    // consultadas: pomos a etiqueta na coluna "Seguimento" e saltamos.
+    // (Volta a ficar ativa se apagares a célula do Estado, coluna C.)
+    const fimAtual = estadoFinal(estados[i][0]);
+    if (fimAtual) {
+      enc.getRange(linha, 10).setValue(etiquetaFechada(fimAtual));
       ignoradas++;
       continue;
     }
+
+    // Só chega aqui quem está ATIVA → vamos consultar os CTT.
     consultadas++;
+    if (consultadas > 1) Utilities.sleep(400); // pausa só ENTRE pedidos (nunca depois do último)
 
     let res;
     try { res = consultar(code, sess); }
-    catch (e) { enc.getRange(linha, 3, 1, 6).setValues([["⚠ Erro", String(e), "", "", "", agora()]]); continue; }
+    catch (e) {
+      enc.getRange(linha, 3, 1, 6).setValues([["⚠ Erro", String(e), "", "", "", agora()]]);
+      enc.getRange(linha, 10).setValue("🟡 Ativa (repete)");
+      continue;
+    }
 
     if (res.versaoMudou) {
       enc.getRange(linha, 3).setValue("⚠ Atualizar API_VERSION (ver guia)");
+      enc.getRange(linha, 10).setValue("🟡 Ativa (repete)");
       continue;
     }
     if (!res.found) {
       enc.getRange(linha, 3, 1, 6).setValues([["Sem informação", "Objeto ainda não registado ou inexistente", "", "", "", agora()]]);
       enc.getRange(linha, 9).setValue("Não");
+      enc.getRange(linha, 10).setValue("🟡 Ativa");
       continue;
     }
 
@@ -178,6 +194,10 @@ function atualizarEncomendas() {
     const prog = (ev.Progress != null) ? (ev.Progress + "%") : "";
     enc.getRange(linha, 3, 1, 6).setValues([[ ev.State || "", ev.Event || "", ev.Local || "", prog, dataEv, agora() ]]);
     enc.getRange(linha, 9).setValue("Sim");
+
+    // Seguimento: fechada se o novo estado for final, senão ativa.
+    const fimNovo = estadoFinal(ev.State);
+    enc.getRange(linha, 10).setValue(fimNovo ? etiquetaFechada(fimNovo) : "🟡 Ativa");
 
     // Acrescenta eventos novos ao histórico (do mais antigo para o mais recente)
     if (hist) {
@@ -190,7 +210,6 @@ function atualizarEncomendas() {
         }
       });
     }
-    Utilities.sleep(400); // ser simpático com o site dos CTT
   }
 
   if (hist && novosHist.length) {
@@ -201,6 +220,19 @@ function atualizarEncomendas() {
 }
 
 function agora() { return Utilities.formatDate(new Date(), TZ, "dd/MM/yyyy HH:mm"); }
+
+// Devolve "entregue"/"devolvido" se o estado for FINAL; senão null.
+// Usa "começa por" para não apanhar estados intermédios ("Em entrega",
+// "Em devolução" continuam a ser seguidos até fecharem mesmo).
+function estadoFinal(txt) {
+  const s = String(txt || "").trim().toLowerCase();
+  if (s.indexOf("entregue") === 0) return "entregue";
+  if (s.indexOf("devolvid") === 0) return "devolvido"; // devolvido / devolvida
+  return null;
+}
+function etiquetaFechada(tipo) {
+  return tipo === "entregue" ? "🟢 Fechada (entregue)" : "🔴 Fechada (devolvido)";
+}
 
 // ======================= LIGAÇÃO AOS CTT =======================
 function abrirSessao() {
