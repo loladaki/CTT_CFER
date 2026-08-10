@@ -150,14 +150,14 @@ function atualizarEncomendas() {
 
     let res;
     try { res = consultar(code, sess); }
-    catch (e) { enc.getRange(linha, 3, 1, 7).setValues([["⚠ Erro", String(e), "", "", "", "", agora()]]); continue; }
+    catch (e) { enc.getRange(linha, 3, 1, 6).setValues([["⚠ Erro", String(e), "", "", "", agora()]]); continue; }
 
     if (res.versaoMudou) {
       enc.getRange(linha, 3).setValue("⚠ Atualizar API_VERSION (ver guia)");
       continue;
     }
     if (!res.found) {
-      enc.getRange(linha, 3, 1, 7).setValues([["Sem informação", "Objeto ainda não registado ou inexistente", "", "", "", "", agora()]]);
+      enc.getRange(linha, 3, 1, 6).setValues([["Sem informação", "Objeto ainda não registado ou inexistente", "", "", "", agora()]]);
       enc.getRange(linha, 9).setValue("Não");
       continue;
     }
@@ -165,7 +165,7 @@ function atualizarEncomendas() {
     const ev = res.events[0] || {};
     const dataEv = ev.DateTime ? Utilities.formatDate(new Date(ev.DateTime), TZ, "dd/MM/yyyy HH:mm") : "";
     const prog = (ev.Progress != null) ? (ev.Progress + "%") : "";
-    enc.getRange(linha, 3, 1, 7).setValues([[ ev.State || "", ev.Event || "", ev.Local || "", prog, dataEv, agora() ]]);
+    enc.getRange(linha, 3, 1, 6).setValues([[ ev.State || "", ev.Event || "", ev.Local || "", prog, dataEv, agora() ]]);
     enc.getRange(linha, 9).setValue("Sim");
 
     // Acrescenta eventos novos ao histórico (do mais antigo para o mais recente)
