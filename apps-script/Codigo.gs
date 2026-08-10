@@ -40,11 +40,23 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("CTT")
     .addItem("Atualizar agora", "atualizarEncomendas")
+    .addItem("Abrir dashboard (link)", "mostrarLinkDashboard")
     .addSeparator()
     .addItem("Configurar (1ª vez)", "configurar")
     .addItem("Ativar atualização diária", "ativarDiario")
     .addItem("Desativar atualização diária", "desativarDiario")
     .addToUi();
+}
+
+// Mostra o link da aplicação web (dashboard), depois de publicada.
+function mostrarLinkDashboard() {
+  const url = ScriptApp.getService().getUrl();
+  const ui = SpreadsheetApp.getUi();
+  if (!url) {
+    ui.alert("Dashboard ainda não publicado.\n\nNo editor do Apps Script: Implementar → Nova implementação → Aplicação Web → (Executar como: eu; Quem tem acesso: à tua escolha) → Implementar. Depois volta a clicar aqui.");
+  } else {
+    ui.alert("Link do dashboard:\n\n" + url + "\n\nAbre-o no browser e partilha com a equipa.");
+  }
 }
 
 // ======================= CONFIGURAÇÃO INICIAL =======================
@@ -351,6 +363,65 @@ function desativarDiario() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === "atualizarEncomendas") ScriptApp.deleteTrigger(t);
   });
+}
+
+// ======================= DASHBOARD (APLICAÇÃO WEB) =======================
+// Publica em: Implementar → Nova implementação → Aplicação Web.
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile("Index")
+    .setTitle("CTT · Seguimento de Encomendas")
+    .addMetaTag("viewport", "width=device-width, initial-scale=1")
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+// Chamada pelo dashboard (google.script.run) para obter os dados da folha.
+function obterDados() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const enc = ss.getSheetByName(FOLHA_ENC);
+  const hist = ss.getSheetByName(FOLHA_HIST);
+  const parcels = [];
+
+  if (enc && enc.getLastRow() > 1) {
+    const vals = enc.getRange(2, 1, enc.getLastRow() - 1, 10).getValues();
+
+    // Histórico agrupado por código
+    const histPorCodigo = {};
+    if (hist && hist.getLastRow() > 1) {
+      hist.getRange(2, 1, hist.getLastRow() - 1, 5).getValues().forEach(function (r) {
+        const c = String(r[0] || "").toUpperCase();
+        if (!c) return;
+        (histPorCodigo[c] = histPorCodigo[c] || []).push({
+          data: String(r[1] || ""), estado: String(r[2] || ""),
+          evento: String(r[3] || ""), local: String(r[4] || "")
+        });
+      });
+    }
+
+    vals.forEach(function (r) {
+      const code = String(r[0] || "").trim();
+      if (!code) return;
+      parcels.push({
+        code: code,
+        descricao: String(r[1] || ""),
+        estado: String(r[2] || ""),
+        situacao: String(r[3] || ""),
+        local: String(r[4] || ""),
+        progresso: String(r[5] || ""),
+        dataEvento: String(r[6] || ""),
+        verificado: String(r[7] || ""),
+        encontrado: String(r[8] || ""),
+        seguimento: String(r[9] || ""),
+        historico: (histPorCodigo[code.toUpperCase()] || []).reverse() // mais recente primeiro
+      });
+    });
+  }
+  return { geradoEm: agora(), parcels: parcels };
+}
+
+// Permite ao botão "Atualizar" do dashboard forçar uma recolha aos CTT.
+function atualizarViaDashboard() {
+  atualizarEncomendas();
+  return obterDados();
 }
 
 /* =========================================================================
