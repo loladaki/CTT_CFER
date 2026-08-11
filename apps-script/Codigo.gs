@@ -35,6 +35,11 @@ const FOLHA_ENC = "Encomendas";
 const FOLHA_HIST = "Histórico";
 const FOLHA_PAINEL = "Painel";
 
+// Horas (0-23) a que a atualização automática corre. Ex.: [13, 20] = 2x/dia.
+// Para 1x/dia usa [20]; para 3x usa [9, 14, 20]. Depois de mudar, volta a
+// clicar no menu "CTT → Ativar atualização diária".
+const HORAS_ATUALIZACAO = [13, 20];
+
 // ======================= MENU =======================
 function onOpen() {
   SpreadsheetApp.getUi()
@@ -357,8 +362,11 @@ function corpo(code, moduleVersion) {
 // ======================= GATILHO DIÁRIO =======================
 function ativarDiario() {
   desativarDiario();
-  ScriptApp.newTrigger("atualizarEncomendas").timeBased().everyDays(1).atHour(7).create();
-  SpreadsheetApp.getUi().alert("Atualização diária ativada ✅ (todos os dias por volta das 7h).");
+  HORAS_ATUALIZACAO.forEach(function (h) {
+    ScriptApp.newTrigger("atualizarEncomendas").timeBased().everyDays(1).atHour(h).create();
+  });
+  SpreadsheetApp.getUi().alert("Atualização automática ativada ✅\n\nCorre todos os dias por volta das "
+    + HORAS_ATUALIZACAO.join("h e ") + "h.");
 }
 function desativarDiario() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
