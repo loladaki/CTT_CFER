@@ -1,0 +1,3 @@
+# Robô de seguimento de encomendas CTT
+playwright>=1.40
+requests>=2.31

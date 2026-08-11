@@ -1,0 +1,13 @@
+# Lista de objetos/encomendas a seguir nos CTT.
+#
+# Um por linha. Podes juntar uma descrição depois de ';' (ou ',' / tab):
+#
+#   RR123456789PT ; Encomenda para o cliente ABC
+#   DW987654321PT ; Devolução fornecedor XPTO
+#   LX000111222PT
+#
+# Linhas em branco e linhas a começar por '#' são ignoradas.
+# Depois de editar, guarda o ficheiro e faz commit — a atualização diária
+# (ou o botão "Run workflow" no GitHub) trata do resto.
+#
+# --- adiciona os teus objetos abaixo desta linha ---

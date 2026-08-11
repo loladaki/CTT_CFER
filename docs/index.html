@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CTT · Seguimento de Encomendas</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot"></span>
+      <h1>Seguimento de Encomendas CTT</h1>
+    </div>
+    <div class="meta">
+      <span id="updated">a carregar…</span>
+      <button id="refresh" title="Recarregar dados">↻</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="kpis" id="kpis"><!-- preenchido por JS --></section>
+
+    <section class="controls">
+      <input type="search" id="search" placeholder="Procurar por nº de objeto ou descrição…">
+      <div class="filters" id="filters"><!-- chips de filtro --></div>
+    </section>
+
+    <section class="table-wrap">
+      <table id="table">
+        <thead>
+          <tr>
+            <th data-sort="code">Objeto</th>
+            <th data-sort="description">Descrição</th>
+            <th data-sort="status_category">Estado</th>
+            <th data-sort="status_text">Último evento</th>
+            <th data-sort="last_checked">Verificado</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <p class="empty" id="empty" hidden>Sem encomendas para mostrar.</p>
+    </section>
+
+    <details class="help">
+      <summary>Como adicionar encomendas?</summary>
+      <ol>
+        <li>Edita o ficheiro <code>data/tracking_numbers.txt</code> no repositório
+            (um número por linha, com descrição opcional a seguir a <code>;</code>), ou</li>
+        <li>No GitHub, vai a <strong>Actions → Adicionar encomenda → Run workflow</strong>
+            e escreve o número, ou</li>
+        <li>Localmente: <code>python scripts/add_parcel.py RR123456789PT "descrição"</code></li>
+      </ol>
+      <p>A atualização corre automaticamente todos os dias. Também podes forçar
+         em <strong>Actions → Atualização diária CTT → Run workflow</strong>.</p>
+    </details>
+  </main>
+
+  <footer>
+    <span>CTT_CFER · dados lidos de <code>data.json</code></span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
