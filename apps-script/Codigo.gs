@@ -71,15 +71,19 @@ function configurar() {
   // --- Folha "Encomendas" ---
   let enc = ss.getSheetByName(FOLHA_ENC) || ss.insertSheet(FOLHA_ENC, 0);
   const cabec = ["Nº Objeto", "Descrição", "Estado", "Situação (último evento)",
-                 "Local", "Progresso", "Data do evento", "Verificado em", "Encontrado", "Seguimento"];
+                 "Local", "Progresso", "Data do evento", "Verificado em", "Encontrado", "Seguimento", "Fecho manual"];
   enc.getRange(1, 1, 1, cabec.length).setValues([cabec])
      .setFontWeight("bold").setBackground("#c8102e").setFontColor("#ffffff");
   enc.setFrozenRows(1);
   enc.setColumnWidth(1, 150); enc.setColumnWidth(2, 200);
   enc.setColumnWidth(3, 140); enc.setColumnWidth(4, 320);
   enc.setColumnWidth(5, 180); enc.setColumnWidth(7, 150); enc.setColumnWidth(8, 150);
-  enc.setColumnWidth(10, 170);
+  enc.setColumnWidth(10, 170); enc.setColumnWidth(11, 140);
   enc.getRange("F2:F1000").setNumberFormat('0"%"'); // Progresso: guarda 0-100, mostra "80%"
+  // Coluna K "Fecho manual": menu Automático / Fechada
+  const dv = SpreadsheetApp.newDataValidation()
+    .requireValueInList(["Automático", "Fechada"], true).setAllowInvalid(true).build();
+  enc.getRange("K2:K1000").setDataValidation(dv);
   aplicarCores(enc);
 
   // --- Folha "Histórico" ---
@@ -154,6 +158,7 @@ function atualizarEncomendas() {
 
   const codigos = enc.getRange(2, 1, ultima - 1, 1).getValues();
   const estados = enc.getRange(2, 3, ultima - 1, 1).getValues(); // coluna C: estado atual (lido de uma vez)
+  const manuais = enc.getRange(2, 11, ultima - 1, 1).getValues(); // coluna K: fecho manual
   const sess = abrirSessao();
   if (!sess) { enc.getRange(2, 3).setValue("⚠ Sem ligação aos CTT"); return; }
 
@@ -172,7 +177,18 @@ function atualizarEncomendas() {
     const linha = i + 2;
     if (!code) continue;
 
-    // --- Lógica ATIVA / FECHADA -------------------------------------------
+    // --- OVERRIDE MANUAL --------------------------------------------------
+    // Se marcaste "Fechada" (coluna K ou botão do dashboard), o robô não
+    // consulta os CTT para esta encomenda — útil quando já chegou mas o site
+    // dos CTT ainda mostra "Em trânsito".
+    const manual = String(manuais[i][0] || "").trim().toLowerCase();
+    if (manual.indexOf("fechad") > -1) {
+      enc.getRange(linha, 10).setValue("🔒 Fechada (manual)");
+      ignoradas++;
+      continue;
+    }
+
+    // --- Lógica ATIVA / FECHADA (automática) ------------------------------
     // Encomendas num estado FINAL (Entregue / Devolvido) deixam de ser
     // consultadas: pomos a etiqueta na coluna "Seguimento" e saltamos.
     // (Volta a ficar ativa se apagares a célula do Estado, coluna C.)
@@ -391,7 +407,7 @@ function obterDados() {
   const parcels = [];
 
   if (enc && enc.getLastRow() > 1) {
-    const vals = enc.getRange(2, 1, enc.getLastRow() - 1, 10).getValues();
+    const vals = enc.getRange(2, 1, enc.getLastRow() - 1, 11).getValues();
 
     // Histórico agrupado por código
     const histPorCodigo = {};
@@ -420,6 +436,7 @@ function obterDados() {
         verificado: String(r[7] || ""),
         encontrado: String(r[8] || ""),
         seguimento: String(r[9] || ""),
+        manual: String(r[10] || ""),
         historico: (histPorCodigo[code.toUpperCase()] || []).reverse() // mais recente primeiro
       });
     });
@@ -430,6 +447,31 @@ function obterDados() {
 // Permite ao botão "Atualizar" do dashboard forçar uma recolha aos CTT.
 function atualizarViaDashboard() {
   atualizarEncomendas();
+  return obterDados();
+}
+
+// Fecho manual a partir do dashboard.
+// modo: "fechar" (marca Fechada manual) | "reabrir" (volta ao automático).
+function definirFecho(code, modo) {
+  code = String(code || "").trim().toUpperCase();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const enc = ss.getSheetByName(FOLHA_ENC);
+  if (!enc || enc.getLastRow() < 2) return obterDados();
+
+  const codes = enc.getRange(2, 1, enc.getLastRow() - 1, 1).getValues();
+  for (let i = 0; i < codes.length; i++) {
+    if (String(codes[i][0] || "").trim().toUpperCase() === code) {
+      const linha = i + 2;
+      if (modo === "fechar") {
+        enc.getRange(linha, 11).setValue("Fechada");        // coluna K
+        enc.getRange(linha, 10).setValue("🔒 Fechada (manual)"); // coluna J (Seguimento)
+      } else { // reabrir
+        enc.getRange(linha, 11).setValue("Automático");
+        enc.getRange(linha, 10).setValue("🟡 Ativa");
+      }
+      break;
+    }
+  }
   return obterDados();
 }
 
